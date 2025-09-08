@@ -1,25 +1,50 @@
 # .github/workflows/deploy.yml
 
-name: Build and Deploy to Cloud Run
+name: Test, Build, and Deploy to Cloud Run
 
-# This workflow runs on any push to the "main" branch
 on:
   push:
     branches: [ "main" ]
 
-# Environment variables available to all jobs
 env:
-  PROJECT_ID: ${{ secrets.mlops-pipeline-469907 }}
-  GAR_LOCATION: us-central1 # The region of your Artifact Registry
-  SERVICE: yolo-api-service # The name of your Cloud Run service
-  REGION: us-central1      # The region of your Cloud Run service
+  PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+  GAR_LOCATION: us-central1
+  SERVICE: yolo-api-service
+  REGION: us-central1
 
 jobs:
-  deploy:
-    name: Build and Deploy
+  #-------------------------
+  # Job 1: Run Tests 🧪
+  #-------------------------
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+      
+      - name: Install application dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install test dependencies
+        run: pip install pytest
+
+      - name: Run tests with pytest
+        run: python -m pytest tests/
+
+  #-------------------------
+  # Job 2: Build Image 📦
+  #-------------------------
+  build:
+    name: Build and Push Image
+    needs: test
     runs-on: ubuntu-latest
 
-    # Add permissions for the workflow to authenticate with GCP
     permissions:
       contents: 'read'
       id-token: 'write'
@@ -29,33 +54,45 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Authenticate to Google Cloud
-        id: auth
         uses: 'google-github-actions/auth@v2'
         with:
-          workload_identity_provider: ${{ secrets.projects/255063190401/locations/global/workloadIdentityPools/github-action-pool/providers/github-provider }}
-          service_account: ${{ secrets.github-actions-deployer@mlops-pipeline-469907.iam.gserviceaccount.com }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
 
       - name: Configure Docker
         run: gcloud auth configure-docker ${{ env.GAR_LOCATION }}-docker.pkg.dev
 
       - name: Build and Push Docker Image
         run: |
-          # Build the image and tag it with the unique Git commit SHA
           docker build -t ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/api-images/fastapi-yolo:${{ github.sha }} .
-          
-          # Push the image to Google Artifact Registry
           docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/api-images/fastapi-yolo:${{ github.sha }}
 
+  #-------------------------
+  # Job 3: Deploy to Cloud 🚀
+  #-------------------------
+  deploy:
+    name: Deploy to Cloud Run
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: 'read'
+      id-token: 'write'
+
+    steps:
+      - name: Authenticate to Google Cloud
+        uses: 'google-github-actions/auth@v2'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
       - name: Deploy to Cloud Run
-        id: deploy
         uses: 'google-github-actions/deploy-cloudrun@v2'
         with:
           service: ${{ env.SERVICE }}
           region: ${{ env.REGION }}
-          # Deploy the specific image we just built and pushed
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/api-images/fastapi-yolo:${{ github.sha }}
           flags: "--memory=2Gi --allow-unauthenticated"
-
-      # If the deployment is successful, print the URL to the logs
+      
       - name: Show Output URL
         run: echo "Successfully deployed to ${{ steps.deploy.outputs.url }}"
