@@ -68,7 +68,7 @@ jobs:
           docker push ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/api-images/fastapi-yolo:${{ github.sha }}
 
   #-------------------------
-  # Job 3: Deploy to Cloud 🚀
+  # Job 3: Deploy to Cloud Run
   #-------------------------
   deploy:
     name: Deploy to Cloud Run
