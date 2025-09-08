@@ -12,6 +12,8 @@ env:
   SERVICE: yolo-api-service
   REGION: us-central1
 
+# .github/workflows/deploy.yml
+
 jobs:
   #-------------------------
   # Job 1: Run Tests 🧪
@@ -31,8 +33,10 @@ jobs:
       - name: Install application dependencies
         run: pip install -r requirements.txt
 
+      # --- UPDATE THIS STEP ---
       - name: Install test dependencies
-        run: pip install pytest
+        run: pip install pytest httpx
+      # ------------------------
 
       - name: Run tests with pytest
         run: python -m pytest tests/
