@@ -1,54 +1,65 @@
+import os
 import io
-import random
 import time
 from typing import Optional, List, Tuple
 
 from PIL import Image
+from ultralytics import YOLO
+from google.cloud import storage
 
-class DummyModel:
-    def __init__(self, version: str = "v0-dummy"):
-        self.version = version
-        self.labels = ["cat", "dog", "car", "garbage", "unknown"]
+# --- Configuration ---
+# ❗️ UPDATE THESE TWO LINES WITH YOUR DETAILS ❗️
+GCS_BUCKET_NAME = "your-unique-bucket-name"
+MODEL_FILE_KEY = "best.pt"
+# -----------------------------------------
 
-    def _predict_label(self) -> str:
-        return random.choice(self.labels)
+LOCAL_MODEL_PATH = f"/tmp/{MODEL_FILE_KEY}"
 
-    def _confidence(self) -> float:
-        return round(random.uniform(0.70, 0.99), 2)
+class RealModel:
+    def __init__(self, model_path: str):
+        self.model = YOLO(model_path)
+        self.version = model_path
 
-    def predict_image_bytes(self, data: bytes) -> Tuple[str, float]:
-        # Validate that the file is a readable image
+    def predict_image_bytes(self, image_bytes: bytes) -> Tuple[str, float]:
         try:
-            Image.open(io.BytesIO(data)).verify()
-        except Exception:
-            # If it's not a valid image, return an error label
+            image = Image.open(io.BytesIO(image_bytes))
+            results = self.model(image)
+
+            if not results or not results[0].boxes:
+                return "no_detection", 0.0
+
+            top_result = results[0].boxes[0]
+            top_conf = float(top_result.conf[0])
+            top_cls_index = int(top_result.cls[0])
+            top_cls_name = self.model.names[top_cls_index]
+
+            return top_cls_name, round(top_conf, 4)
+        except Exception as e:
+            print(f"Error processing image: {e}")
             return "invalid_image", 0.0
-        
-        # If valid, return a random prediction
-        return self._predict_label(), self._confidence()
 
-    def predict_features(self, feats: List[float]) -> Tuple[str, float]:
-        # Simple rule for feature-based prediction
-        if int(sum(feats)) % 2 == 0:
-            label = "even-class"
-        else:
-            label = "odd-class"
-        return label, self._confidence()
+model_instance: Optional[RealModel] = None
 
-# --- Singleton Pattern for Model Loading ---
-# This ensures the model is created only once.
-model: Optional[DummyModel] = None
+def load_model() -> RealModel:
+    global model_instance
+    if model_instance is None:
+        if not os.path.exists(LOCAL_MODEL_PATH):
+            print(f"Downloading model from gs://{GCS_BUCKET_NAME}/{MODEL_FILE_KEY}...")
+            client = storage.Client()
+            bucket = client.bucket(GCS_BUCKET_NAME)
+            blob = bucket.blob(MODEL_FILE_KEY)
+            os.makedirs(os.path.dirname(LOCAL_MODEL_PATH), exist_ok=True)
+            blob.download_to_filename(LOCAL_MODEL_PATH)
+            print("Model downloaded successfully.")
 
-def load_model() -> DummyModel:
-    """Loads the dummy model into a singleton instance."""
-    global model
-    if model is None:
-        model = DummyModel()
-    return model
+        print(f"Loading model from {LOCAL_MODEL_PATH}...")
+        model_instance = RealModel(LOCAL_MODEL_PATH)
+        print("Model loaded successfully.")
+
+    return model_instance
 
 def timed(fn, *args, **kwargs):
-    """A helper function to time the execution of another function."""
     t0 = time.perf_counter()
     out = fn(*args, **kwargs)
     t1 = time.perf_counter()
-    return out, (t1 - t0) * 1000.0  # Return latency in milliseconds
+    return out, (t1 - t0) * 1000.0
