@@ -8,7 +8,7 @@ from ultralytics import YOLO
 from google.cloud import storage
 
 # --- Configuration ---
-# ❗️ UPDATE THESE TWO LINES WITH YOUR DETAILS ❗️
+# ❗️ UPDATE THESE TWO LINES WITH YOUR DETAILS \\
 GCS_BUCKET_NAME = "your-unique-bucket-name"
 MODEL_FILE_KEY = "best.pt"
 # -----------------------------------------
