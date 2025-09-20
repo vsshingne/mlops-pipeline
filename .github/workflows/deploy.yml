@@ -70,5 +70,8 @@ jobs:
           image: ${{ env.GAR_LOCATION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/api-images/fastapi-yolo:${{ github.sha }}
           flags: "--memory=2Gi --allow-unauthenticated"
       
+      - name: Debug deploy step outputs
+        run: echo '${{ toJSON(steps.deploy) }}'
+      
       - name: Show Output URL
         run: echo "Successfully deployed to ${{ steps.deploy.outputs.url }}"
