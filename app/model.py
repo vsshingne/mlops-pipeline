@@ -9,7 +9,7 @@ class DummyModel:
     """A simple dummy model for placeholder predictions."""
     def __init__(self, version: str = "v1.0.0-dummy"):
         self.version = version
-        self.labels = ["cat", "dog", "car", "person", "tree"]
+        self.labels = ["cat", "dog", "car", "person", "tree"] """on"""
 
     def _predict_label(self) -> str:
         """Returns a random prediction label."""
